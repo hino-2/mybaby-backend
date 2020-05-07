@@ -4,10 +4,10 @@ if(process.env.NODE_ENV !== 'production') {
 
 const express        = require('express')
 const bcrypt         = require('bcrypt')
-const passport       = require("passport")
-const initPassport   = require('./passport-config')
-const flash          = require('express-flash')
-const session        = require('express-session')
+// const passport       = require("passport")
+// const initPassport   = require('./passport-config')
+// const flash          = require('express-flash')
+// const session        = require('express-session')
 const methodOverride = require('method-override')
 const { v4: uuidv4 } = require('uuid')
 // const path 			 = require('path')
@@ -26,17 +26,20 @@ mongoose.connect(`mongodb+srv://${process.env.MONGOUSER}:${process.env.MONGOPASS
 
 const userSchema = new mongoose.Schema({
     userName: String,
+    email: String,
+    hashedPassword: String,
     babies: Array,
-    gender: String
+    gender: String,
+    money: Number
 })
 
-const user = new mongoose.model('user', userSchema)
+const users = new mongoose.model('user', userSchema)
 
-initPassport(
-    passport, 
-    email => users.find(user => user.email == email),
-    id => users.find(user => user.id == id)
-)
+// initPassport(
+//     passport, 
+//     email => users.findOne({ email: email }),
+//     id => users.findOne({ id: id })
+// )
 
 const transporter = nodemailer.createTransport({
     service: 'Mail.ru',
@@ -46,55 +49,66 @@ const transporter = nodemailer.createTransport({
     }
 })
 
-app.use(history({logger: console.log.bind(console)}))
+app.use(history(/*{logger: console.log.bind(console)}*/))
 app.use("/", express.static(__dirname + '/'))
 app.use("/static", express.static(__dirname + '/static'))
 app.use("/img", express.static(__dirname + '/img'))
 app.use(express.urlencoded({ extended: false }))
-app.use(flash())
-app.use(session({
-    genid: () => uuidv4(),
-    secret: 'process.env.SESSION_SECRET',
-    resave: false,
-    saveUninitialized: false
-}))
-app.use(passport.initialize())
-app.use(passport.session())
+// app.use(flash())
+// app.use(session({
+//     genid: () => uuidv4(),
+//     secret: 'process.env.SESSION_SECRET',
+//     resave: false,
+//     saveUninitialized: false
+// }))
+// app.use(passport.initialize())
+// app.use(passport.session())
 app.use(methodOverride('_method'))
 app.use(express.json())
 
 app.post('/register', async (req, res) => {
-    if(users.find(user => user.email === req.body.email))
-        return res.send(JSON.stringify({result: "existing email"}))
+    users.findOne({ email: req.body.email }, async (error, result) => {
+        // не нашел: result === null
+        // нашел:    result === document
+        if(error) return res.status(500).send({result: "cant connect to MongoDB", error: error})
+        if(result) return res.send({result: "existing email"})
 
-    try {
-        const hashedPassword = await bcrypt.hash(req.body.password, 10)
-        users.push({
-            id: uuidv4(),
-            name: req.body.name,
-            email: req.body.email,
-            password: hashedPassword,
-            saldo: 0,
-            isLoggedIn: false
-        })
-        res.send(JSON.stringify({result: "success"}))
-    } catch (error) {
-        res.send(JSON.stringify({result: "fail"}))
-    }
+        try {
+            const hashedPassword = await bcrypt.hash(req.body.password, 10)
+            const newUser = users({
+                userName: req.body.name,
+                email: req.body.email,
+                hashedPassword: hashedPassword,
+                gender: req.body.gender,
+                babies: [],
+                money: 0
+            })
+
+            newUser.save((error, result) => {
+                if(error) return res.status(500).send({result: "cant save to MongoDB", error: error})
+                res.send({result: "success"})
+            })
+        } catch (error) {
+            console.log(error)
+            res.status(500).send({result: "fail", error: error})
+        }
+    })
 })
 
-app.post('/login', (req, res, next) => {
-    passport.authenticate('local', (err, user, info) => {
-        req.login(user, (err) => {
-            if (!req.user) 
-                return res.send(JSON.stringify({userID: null}))
+app.post('/login', async (req, res) => {
+    try {
+        const user = await users.findOne({ email: req.body.email }).exec()
+        // console.log(user)
+        if(!user) return res.status(400).send({result: null})
 
-            const user = users.find(user => user.id === req.user.id)
-            user.isLoggedIn = true
-            
-            return res.send(JSON.stringify({userID: user.id, username: user.name, saldo: user.saldo}));
-      })
-    })(req, res, next);
+        if(!bcrypt.compareSync(req.body.password, user.hashedPassword))
+            return res.status(401).send({result: "wrong password"})
+
+        res.status(200).send(user)
+    } catch (error) {
+        console.log(`catched error: ${error}`)
+        res.send({error: error})
+    }
 })
 
 app.post('/registerOrder', (req, res) => {
@@ -134,6 +148,7 @@ app.post('/getOrders', (req, res) => {
 })
 
 app.delete('/logoutUser', (req, res) => {
+    // зачем??
     if(req.body.userID === undefined) 
         return res.sendStatus(403);
 
@@ -163,7 +178,7 @@ app.post('/addMoney', (req, res) => {
 app.get('/users', (req, res) => {
     // обязательно в запросе !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! :
     // Accept: application/json
-    user.find({}, (err, users) => {
+    users.find({}, (err, users) => {
         if (err) return console.error(err)
         res.send(users)
     })
