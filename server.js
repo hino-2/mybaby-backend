@@ -25,7 +25,7 @@ mongoose.connect(`mongodb+srv://${process.env.MONGOUSER}:${process.env.MONGOPASS
 )
 
 const userSchema = new mongoose.Schema({
-    userName: String,
+    name: String,
     email: String,
     hashedPassword: String,
     babies: Array,
@@ -76,7 +76,7 @@ app.post('/register', async (req, res) => {
         try {
             const hashedPassword = await bcrypt.hash(req.body.password, 10)
             const newUser = users({
-                userName: req.body.name,
+                name: req.body.name,
                 email: req.body.email,
                 hashedPassword: hashedPassword,
                 gender: req.body.gender,
