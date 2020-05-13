@@ -20,7 +20,7 @@ const app = express()
 
 const mongoose = require('mongoose')
 mongoose.connect(`mongodb+srv://${process.env.MONGOUSER}:${process.env.MONGOPASS}@hino-2-cluster-yminm.mongodb.net/mybabyru?retryWrites=true&w=majority`, 
-    { useNewUrlParser: true, useUnifiedTopology: true },
+    { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false },
     err => err ? console.log(err) : console.log('connected') 
 )
 
@@ -108,6 +108,45 @@ app.post('/login', async (req, res) => {
     } catch (error) {
         console.log(`catched error: ${error}`)
         res.send({error: error})
+    }
+})
+
+app.post('/newBaby', async (req, res) => {
+    try {
+        const updatedUser = await users.findOneAndUpdate(
+            { _id: req.body.id }, 
+            { $push: { babies: req.body.newBaby } },
+            { new: true }
+        ).exec()
+        res.status(200).json(updatedUser)
+    } catch (error) {
+        res.status(500).json({error: error})
+    }
+})
+
+app.delete('/deleteBaby', async (req, res) => {
+    try {
+        const updatedUser = await users.findOneAndUpdate(
+            { _id: req.body.userId }, 
+            { $pullAll: { babies: [req.body.baby] } },
+            { new: true }
+        ).exec()
+        res.status(200).json(updatedUser)
+    } catch (error) {
+        res.status(500).json({error: error})
+    }
+})
+
+app.post('/editBaby', async (req, res) => {
+    try {
+        const updatedUser = await users.findOneAndUpdate(
+            { _id: req.body.userId, 'babies.id': req.body.baby.id }, 
+            { $set: { 'babies.$': req.body.baby } },
+            { new: true }
+        ).exec()
+        res.status(200).json(updatedUser)
+    } catch (error) {
+        res.status(500).json({error: error})
     }
 })
 
