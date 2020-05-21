@@ -150,6 +150,20 @@ app.post('/editBaby', async (req, res) => {
     }
 })
 
+app.delete('/deleteWeigth', async (req, res) => {
+    try {
+        console.log(req.body)
+        const updatedUser = await users.findOneAndUpdate(
+            { _id: req.body.userId, 'babies.id': req.body.babyId },
+            { $pullAll: { 'babies.$.weigths': [req.body.weigth] } },
+            { new: true }
+        ).exec()
+        res.status(200).json(updatedUser)
+    } catch (error) {
+        res.status(500).json({error: error})
+    }
+})
+
 app.post('/registerOrder', (req, res) => {
     const orderID = uuidv4()
     req.body.order.orderID = orderID
